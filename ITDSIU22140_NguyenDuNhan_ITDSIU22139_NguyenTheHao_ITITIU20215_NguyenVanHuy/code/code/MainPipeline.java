@@ -20,7 +20,7 @@ public class MainPipeline {
         // 1) Load
         System.out.println("Step 1: Loading data...");
         Instances data = DataLoader.load(
-                "C:/Users/Admin/IdeaProjects/Data-mining-world-happiness-2024/ITDSIU22140_NguyenDuNhan_ITDSIU22139_NguyenTheHao_ITITIU20215_NguyenVanHuy/code/data/World Happiness Report 2024.csv"
+                "ITDSIU22140_NguyenDuNhan_ITDSIU22139_NguyenTheHao_ITITIU20215_NguyenVanHuy/code/data/World Happiness Report 2024.csv"
         );
         System.out.println();
 
@@ -79,7 +79,7 @@ public class MainPipeline {
 
         // 8) Save cleaned dataset
         DataSaver.saveArff(data,
-                "C:/Users/Admin/IdeaProjects/Data-mining-world-happiness-2024/ITDSIU22140_NguyenDuNhan_ITDSIU22139_NguyenTheHao_ITITIU20215_NguyenVanHuy/code/data/World_Happiness_2024_cleaned.arff"
+                "ITDSIU22140_NguyenDuNhan_ITDSIU22139_NguyenTheHao_ITITIU20215_NguyenVanHuy/code/data/World_Happiness_2024_cleaned.arff"
         );
 
         System.out.println("Pipeline complete.");

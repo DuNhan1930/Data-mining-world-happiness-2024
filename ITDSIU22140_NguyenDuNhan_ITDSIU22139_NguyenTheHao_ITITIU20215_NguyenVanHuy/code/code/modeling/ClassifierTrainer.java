@@ -63,7 +63,7 @@ public class ClassifierTrainer {
         }
 
         // Step 2: Train MultilayerPerceptron
-        data.setClassIndex(classIndex);
+        data.setClassIndex(classIndex-1);
 
         MultilayerPerceptron mlp = new MultilayerPerceptron();
         // Example configuration (you can tune these):
