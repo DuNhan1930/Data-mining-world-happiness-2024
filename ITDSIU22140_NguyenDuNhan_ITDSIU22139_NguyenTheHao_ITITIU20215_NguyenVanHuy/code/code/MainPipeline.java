@@ -1,17 +1,13 @@
 package ITDSIU22140_NguyenDuNhan_ITDSIU22139_NguyenTheHao_ITITIU20215_NguyenVanHuy.code.code;
 
 // Weka core
-import ITDSIU22140_NguyenDuNhan_ITDSIU22139_NguyenTheHao_ITITIU20215_NguyenVanHuy.code.code.preprocessing.DataTransformer;
 import weka.core.Instances;
 
 // Pipeline helper classes
-import ITDSIU22140_NguyenDuNhan_ITDSIU22139_NguyenTheHao_ITITIU20215_NguyenVanHuy.code.code.preprocessing.DataLoader;
-import ITDSIU22140_NguyenDuNhan_ITDSIU22139_NguyenTheHao_ITITIU20215_NguyenVanHuy.code.code.analysis.DataProfiler;
-import ITDSIU22140_NguyenDuNhan_ITDSIU22139_NguyenTheHao_ITITIU20215_NguyenVanHuy.code.code.export.DataSaver;
-import ITDSIU22140_NguyenDuNhan_ITDSIU22139_NguyenTheHao_ITITIU20215_NguyenVanHuy.code.code.modeling.ClassifierTrainer;
-import ITDSIU22140_NguyenDuNhan_ITDSIU22139_NguyenTheHao_ITITIU20215_NguyenVanHuy.code.code.modeling.ModelEvaluator;
-import ITDSIU22140_NguyenDuNhan_ITDSIU22139_NguyenTheHao_ITITIU20215_NguyenVanHuy.code.code.preprocessing.MissingValueHandler;
-import ITDSIU22140_NguyenDuNhan_ITDSIU22139_NguyenTheHao_ITITIU20215_NguyenVanHuy.code.code.preprocessing.OutlierHandler;
+import ITDSIU22140_NguyenDuNhan_ITDSIU22139_NguyenTheHao_ITITIU20215_NguyenVanHuy.code.code.preprocessing.*;
+import ITDSIU22140_NguyenDuNhan_ITDSIU22139_NguyenTheHao_ITITIU20215_NguyenVanHuy.code.code.analysis.*;
+import ITDSIU22140_NguyenDuNhan_ITDSIU22139_NguyenTheHao_ITITIU20215_NguyenVanHuy.code.code.modeling.*;
+import ITDSIU22140_NguyenDuNhan_ITDSIU22139_NguyenTheHao_ITITIU20215_NguyenVanHuy.code.code.export.*;
 
 import java.util.List;
 
@@ -63,19 +59,29 @@ public class MainPipeline {
         OutlierHandler.winsorizeByWhiskers(data);
         System.out.println();
 
-        System.out.println("Step 6: Classifier training and Showing results... ");
-        // Train RandomForest
-        System.out.println("Model 1: RandomForest Traning...");
-        ClassifierTrainer.TrainResult rfResult = ClassifierTrainer.trainRandomForest(data, data.numAttributes() - 1);
-        System.out.println("Model 1: RandomForest Showing results...");
-        ModelEvaluator.crossValidate(rfResult.model, data, 10);
+        // 6) Dataset preparation (identify attributes + train/test split)
+        System.out.println("Step 6: Preparing train, test data...");
+        DatasetPreparer.printAttributes(data);
+        Instances[] split = DatasetPreparer.trainTestSplit(data, 0.8); // 80% train, 20% test
+        Instances train = split[0];
+        Instances test = split[1];
         System.out.println();
 
-        // Train Multilayer Perceptron
+
+        System.out.println("Step 7: Classifier training and Showing results... ");
+
+        // 7.1) Train Multilayer Perceptron
         System.out.println("Model 2: MultilayerPerception Traning...");
-        ClassifierTrainer.TrainResult mlpResult = ClassifierTrainer.trainMultilayerPerceptron(data, data.numAttributes() - 1);
+        ClassifierTrainer.TrainResult mlpResult = ClassifierTrainer.trainMultilayerPerceptron(train, train.numAttributes() - 1);
         System.out.println("Model 2: MultilayerPerception Showing results...");
-        ModelEvaluator.crossValidate(mlpResult.model, data, 10);
+        ModelEvaluator.crossValidate(mlpResult.model, test, 10);
+
+        // 7.2) Train RandomForest
+        System.out.println("Model 1: RandomForest Traning...");
+        ClassifierTrainer.TrainResult rfResult = ClassifierTrainer.trainRandomForest(train, train.numAttributes() - 1);
+        System.out.println("Model 1: RandomForest Showing results...");
+        ModelEvaluator.crossValidate(rfResult.model, test, 10);
+        System.out.println();
 
         // 8) Save cleaned dataset
         DataSaver.saveArff(data,
