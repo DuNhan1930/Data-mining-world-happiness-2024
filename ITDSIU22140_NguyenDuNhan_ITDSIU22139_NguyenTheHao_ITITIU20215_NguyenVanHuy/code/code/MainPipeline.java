@@ -71,15 +71,15 @@ public class MainPipeline {
         System.out.println("Step 7: Classifier training and Showing results... ");
 
         // 7.1) Train Multilayer Perceptron
-        System.out.println("Model 2: MultilayerPerception Traning...");
+        System.out.println("Model 1: MultilayerPerception Traning...");
         ClassifierTrainer.TrainResult mlpResult = ClassifierTrainer.trainMultilayerPerceptron(train, train.numAttributes() - 1);
-        System.out.println("Model 2: MultilayerPerception Showing results...");
+        System.out.println("Model 1: MultilayerPerception Showing results...");
         ModelEvaluator.crossValidate(mlpResult.model, test, 10);
 
         // 7.2) Train RandomForest
-        System.out.println("Model 1: RandomForest Traning...");
+        System.out.println("Model 2: RandomForest Traning...");
         ClassifierTrainer.TrainResult rfResult = ClassifierTrainer.trainRandomForest(train, train.numAttributes() - 1);
-        System.out.println("Model 1: RandomForest Showing results...");
+        System.out.println("Model 2: RandomForest Showing results...");
         ModelEvaluator.crossValidate(rfResult.model, test, 10);
         System.out.println();
 
