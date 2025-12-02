@@ -65,23 +65,36 @@ public class MainPipeline {
         Instances[] split = DatasetPreparer.trainTestSplit(data, 0.8); // 80% train, 20% test
         Instances train = split[0];
         Instances test = split[1];
-        System.out.println();
 
+        System.out.println();
 
         System.out.println("Step 7: Classifier training and Showing results... ");
 
-        // 7.1) Train Multilayer Perceptron
-        System.out.println("Model 1: MultilayerPerception Traning...");
-        ClassifierTrainer.TrainResult mlpResult = ClassifierTrainer.trainMultilayerPerceptron(train, train.numAttributes() - 1);
-        System.out.println("Model 1: MultilayerPerception Showing results...");
-        ModelEvaluator.crossValidate(mlpResult.model, test, 10);
+//        // 7.1) Train Multilayer Perceptron
+//        System.out.println("Model 1: MultilayerPerception Traning...");
+//        ClassifierTrainer.TrainResult mlpResult = ClassifierTrainer.trainMultilayerPerceptron(train, train.numAttributes() - 1);
+//        System.out.println("Model 1: MultilayerPerception Showing results...");
+////        ModelEvaluator.crossValidate(mlpResult.model, train, 10);
+//        ModelEvaluator.evaluateOnTestSet(mlpResult.model, test);
 
-        // 7.2) Train RandomForest
+        //7.2) Train KNN
+        System.out.println("Model 1: KNN Training...");
+        ClassifierTrainer.TrainResult knnResult = ClassifierTrainer.trainKNN(train, train.numAttributes() - 1);
+        System.out.println("Model 1: KNN Showing results...");
+//        ModelEvaluator.crossValidate(knnResult.model, test, 10);
+        ModelEvaluator.evaluateOnTestSet(knnResult.model, test);
+
+
+        // 7.3) Train RandomForest
         System.out.println("Model 2: RandomForest Traning...");
         ClassifierTrainer.TrainResult rfResult = ClassifierTrainer.trainRandomForest(train, train.numAttributes() - 1);
         System.out.println("Model 2: RandomForest Showing results...");
-        ModelEvaluator.crossValidate(rfResult.model, test, 10);
+//        ModelEvaluator.crossValidate(rfResult.model, test, 10);
+        ModelEvaluator.evaluateOnTestSet(rfResult.model, test);
         System.out.println();
+
+
+
 
         // 8) Save cleaned dataset
         DataSaver.saveArff(data,

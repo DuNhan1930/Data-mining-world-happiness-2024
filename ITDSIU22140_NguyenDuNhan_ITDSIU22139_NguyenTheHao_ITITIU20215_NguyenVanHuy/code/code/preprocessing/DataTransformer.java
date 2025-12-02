@@ -18,9 +18,7 @@ public class DataTransformer {
 
         for (int i = 0; i < data.numAttributes(); i++) {
             String name = data.attribute(i).name().toLowerCase();
-            if (name.contains("country")
-                    || name.contains("year")
-                    || name.contains("healthy life expectancy")) {
+            if (name.equalsIgnoreCase("healthy life expectancy at birth")) {
                 if (indices.length() > 0) indices.append(",");
                 indices.append(i + 1); // Weka uses 1-based indexing
             }
@@ -49,8 +47,8 @@ public class DataTransformer {
         }
 
         // Define bins and labels
-        double[] bins = {0, 2, 4, 6, 8, 10};
-        String[] labels = {"Very Sad", "Sad", "Neutral", "Happy", "Very Happy"};
+        double[] bins = {0, 3, 5, 7, 10};
+        String[] labels = {"Low", "Medium", "High", "Very high"};
 
         // Create new nominal attribute
         ArrayList<String> labelList = new ArrayList<>();
@@ -101,55 +99,72 @@ public class DataTransformer {
             return data;
         }
 
-        // Step 1: Create new attribute list
+        // 1) Xây danh sách thuộc tính mới: tất cả thuộc tính gốc trừ Life Ladder và Category
         ArrayList<Attribute> reordered = new ArrayList<>();
-
-        // Add all attributes except Life Ladder and Category
+        List<Integer> keepOriginalIdx = new ArrayList<>();
         for (int i = 0; i < data.numAttributes(); i++) {
             Attribute att = data.attribute(i);
-            if (!att.name().equals("Life Ladder") && !att.name().equals("Life Ladder Category")) {
-                reordered.add(att);
+            String name = att.name();
+            if (!name.equals("Life Ladder") && !name.equals("Life Ladder Category")) {
+                reordered.add(att);          // giữ nguyên attribute gốc
+                keepOriginalIdx.add(i);      // ghi lại index gốc để map giá trị theo index
             }
         }
 
-        // Step 2: Add renamed Life Ladder
+        // 2) Thêm thuộc tính mới: Life Ladder Numeric (numeric)
         Attribute renamedLifeLadder = new Attribute("Life Ladder Numeric");
         reordered.add(renamedLifeLadder);
+        int lifeNumIndexNew = reordered.size() - 1;
 
-        // Step 3: Add Life Ladder Category at the end
+        // 3) Thêm thuộc tính mới: Life Ladder Category (nominal) ở cuối, với các giá trị y như cũ
         ArrayList<String> categoryLabels = new ArrayList<>();
-        for (int i = 0; i < category.numValues(); i++) {
-            categoryLabels.add(category.value(i));
-        }
+        for (int i = 0; i < category.numValues(); i++) categoryLabels.add(category.value(i));
         Attribute newCategory = new Attribute("Life Ladder Category", categoryLabels);
         reordered.add(newCategory);
+        int categoryIndexNew = reordered.size() - 1;
 
-        // Step 4: Create new dataset
+        // 4) Tạo dataset mới với schema mới
         Instances newData = new Instances(data.relationName() + "_reordered", reordered, data.numInstances());
+
+        // 5) Sao chép giá trị instance theo index (an toàn, không dựa vào tên)
+        int lifeIdxOld = lifeLadder.index();
+        int categoryIdxOld = category.index();
 
         for (int r = 0; r < data.numInstances(); r++) {
             Instance old = data.instance(r);
             Instance inst = new DenseInstance(reordered.size());
             inst.setDataset(newData);
 
-            for (int a = 0; a < reordered.size(); a++) {
-                Attribute att = reordered.get(a);
-                if (att.name().equals("Life Ladder Numeric")) {
-                    inst.setValue(a, old.value(lifeLadder));
-                } else if (att.name().equals("Life Ladder Category")) {
-                    inst.setValue(a, old.stringValue(category));
+            // 5.1) Sao chép tất cả thuộc tính gốc (trừ Life Ladder & Category) theo index đã ghi
+            for (int k = 0; k < keepOriginalIdx.size(); k++) {
+                int oldIdx = keepOriginalIdx.get(k);
+                Attribute newAtt = reordered.get(k); // vị trí k tương ứng với attribute gốc
+                if (old.isMissing(oldIdx)) {
+                    inst.setMissing(k);
+                } else if (newAtt.isNumeric()) {
+                    inst.setValue(k, old.value(oldIdx));
+                } else if (newAtt.isNominal()) {
+                    inst.setValue(k, old.stringValue(oldIdx));
+                } else if (newAtt.isString()) {
+                    inst.setValue(k, old.stringValue(oldIdx));
                 } else {
-                    Attribute oldAtt = data.attribute(att.name());
-                    if (oldAtt != null) {
-                        if (old.isMissing(oldAtt)) {
-                            inst.setMissing(a);
-                        } else if (att.isNumeric()) {
-                            inst.setValue(a, old.value(oldAtt));
-                        } else {
-                            inst.setValue(a, old.stringValue(oldAtt));
-                        }
-                    }
+                    // kiểu khác: cố gắng set bằng string
+                    inst.setValue(k, old.toString(oldIdx));
                 }
+            }
+
+            // 5.2) Gán Life Ladder Numeric từ giá trị Life Ladder cũ
+            if (old.isMissing(lifeIdxOld)) {
+                inst.setMissing(lifeNumIndexNew);
+            } else {
+                inst.setValue(lifeNumIndexNew, old.value(lifeIdxOld));
+            }
+
+            // 5.3) Gán Category theo string từ cột Category cũ
+            if (old.isMissing(categoryIdxOld)) {
+                inst.setMissing(categoryIndexNew);
+            } else {
+                inst.setValue(categoryIndexNew, old.stringValue(categoryIdxOld));
             }
 
             newData.add(inst);
@@ -157,5 +172,12 @@ public class DataTransformer {
 
         System.out.println("Renamed and reordered Life Ladder attributes.");
         return newData;
+    }
+
+    public static Instances convertStringToNominal(Instances data, String attributeName) throws Exception {
+        weka.filters.unsupervised.attribute.StringToNominal filter = new weka.filters.unsupervised.attribute.StringToNominal();
+        filter.setAttributeRange("" + (data.attribute(attributeName).index() + 1)); // Weka uses 1-based index
+        filter.setInputFormat(data);
+        return Filter.useFilter(data, filter);
     }
 }

@@ -3,6 +3,8 @@ package ITDSIU22140_NguyenDuNhan_ITDSIU22139_NguyenTheHao_ITITIU20215_NguyenVanH
 import weka.classifiers.Classifier;
 import weka.classifiers.Evaluation;
 import weka.core.Instances;
+import weka.filters.Filter;
+import weka.filters.unsupervised.attribute.Remove;
 
 import java.util.Random;
 
@@ -34,5 +36,42 @@ public class ModelEvaluator {
         double sum = 0.0;
         for (int i = 0; i < classes; i++) sum += eval.fMeasure(i);
         return sum / classes;
+    }
+
+    public static void evaluateOnTestSet(Classifier model, Instances testData) throws Exception {
+        // Step 1: Remove "Life Ladder Numeric" column
+        int removeIndex = testData.attribute("Life Ladder Numeric") != null
+                ? testData.attribute("Life Ladder Numeric").index()
+                : -1;
+
+        if (removeIndex != -1) {
+            Remove remove = new Remove();
+            remove.setAttributeIndicesArray(new int[]{removeIndex});
+            remove.setInvertSelection(false);
+            remove.setInputFormat(testData);
+            testData = Filter.useFilter(testData, remove);
+            System.out.println("Removed 'Life Ladder Numeric' before testing.");
+        } else {
+            System.out.println("Attribute 'Life Ladder Numeric' not found — skipping removal.");
+        }
+
+        testData.setClassIndex(testData.classIndex() < 0 ? testData.numAttributes() - 1 : testData.classIndex());
+        Evaluation eval = new Evaluation(testData);
+        eval.evaluateModel(model, testData);
+
+        System.out.println("Evaluation on test set:");
+        System.out.println("  - Accuracy: " + String.format("%.4f", (1.0 - eval.errorRate()) * 100) + "%");
+
+        if (testData.classAttribute().isNominal()) {
+            System.out.println("  - Kappa: " + String.format("%.4f", eval.kappa()));
+            System.out.println("  - Macro F1: " + String.format("%.4f", macroF1(eval, testData)));
+            System.out.println(eval.toSummaryString());
+            System.out.println(eval.toClassDetailsString());
+            System.out.println(eval.toMatrixString());
+        } else {
+            System.out.println("  - Regression mode: skipping Kappa and F1");
+            System.out.println("  - MAE: " + String.format("%.4f", eval.meanAbsoluteError()));
+            System.out.println("  - RMSE: " + String.format("%.4f", eval.rootMeanSquaredError()));
+        }
     }
 }
