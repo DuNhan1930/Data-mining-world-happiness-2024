@@ -113,7 +113,6 @@ public class WorldHappinessModels {
 
     // -------------------------------------------------
     // Create RandomForest with chosen numTrees
-    // (for use with crossValidateModel; DO NOT call buildClassifier here)
     // -------------------------------------------------
     private static RandomForest createRandomForest(Instances data, int numTrees) {
         RandomForest rf = new RandomForest();
@@ -189,7 +188,6 @@ public class WorldHappinessModels {
             double recall    = eval.recall(i);
             double f1        = eval.fMeasure(i);
 
-            // Support = tổng số instance thật của lớp i (tổng theo hàng i trong confusion matrix)
             int support = 0;
             for (int j = 0; j < data.numClasses(); j++) {
                 support += (int) Math.round(cm[i][j]);
