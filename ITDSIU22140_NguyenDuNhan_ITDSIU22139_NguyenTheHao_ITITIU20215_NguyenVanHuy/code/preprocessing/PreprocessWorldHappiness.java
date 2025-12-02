@@ -45,7 +45,7 @@ public class PreprocessWorldHappiness {
         System.out.println("Loaded CSV: " + data.numInstances() + " rows, " + data.numAttributes() + " columns.");
 
         // =====================
-        // 2. Create Life Ladder Category (bins [0,3,5,7,10])
+        // 2. Create Life Ladder Category (bins [0,5,7,10])
         // =====================
         ensureLifeLadderCategory(data);
 
@@ -57,7 +57,7 @@ public class PreprocessWorldHappiness {
         // =====================
         // 4. Robust scaler numeric columns
         // =====================
-        RobustScalerHandler.robustScale(data, NUM_COLS);      // RobustScaler
+        RobustScalerHandler.robustScale(data, NUM_COLS);
 
         // =====================
         // 5. Drop unwanted columns
@@ -97,7 +97,7 @@ public class PreprocessWorldHappiness {
     }
 
     /**
-     * Ensure Life Ladder Category exists, constructed from Life Ladder using bins [0,3,5,7,10].
+     * Ensure Life Ladder Category exists, constructed from Life Ladder using bins [0,5,7,10].
      */
     private static void ensureLifeLadderCategory(Instances data) {
         Attribute catAttr = data.attribute(LIFE_LADDER_CAT_COL);
@@ -116,7 +116,6 @@ public class PreprocessWorldHappiness {
         levels.add("Low");
         levels.add("Medium");
         levels.add("High");
-        levels.add("Very High");
 
         Attribute newCatAttr = new Attribute(LIFE_LADDER_CAT_COL, levels);
         int newIndex = data.numAttributes();
@@ -133,14 +132,12 @@ public class PreprocessWorldHappiness {
             }
             double v = inst.value(lifeIdx);
             String label;
-            if (v <= 3.0) {
+            if (v <= 5.0) {
                 label = "Low";
-            } else if (v <= 5.0) {
-                label = "Medium";
             } else if (v <= 7.0) {
-                label = "High";
+                label = "Medium";
             } else {
-                label = "Very High";
+                label = "High";
             }
             inst.setValue(catIdx, label);
         }

@@ -6,7 +6,6 @@ import weka.core.converters.ConverterUtils.DataSource;
 import weka.classifiers.Classifier;
 import weka.classifiers.Evaluation;
 import weka.classifiers.trees.RandomForest;
-import weka.classifiers.functions.MultilayerPerceptron;
 import weka.classifiers.lazy.IBk;   // KNN
 
 import java.util.Random;
@@ -46,7 +45,7 @@ public class WorldHappinessModels {
         // =====================
         // 3. Stratified 80/20 train/test split with random seed 42
         // =====================
-        int seed = 42;
+        int seed = 36;
         double testRatio = 0.2;
         Instances[] split = stratifiedTrainTestSplit(data, testRatio, seed);
         Instances train = split[0];
@@ -69,7 +68,7 @@ public class WorldHappinessModels {
         // 5. Train & evaluate models
         // =====================
         evaluateModel("Random Forest", rf, train, test);
-        evaluateModel("KNN (k=5)",      knn, train, test);
+        evaluateModel("KNN (k=7)",      knn, train, test);
     }
 
     // -------------------------------------------------
@@ -145,7 +144,7 @@ public class WorldHappinessModels {
         if (k < 1) k = 1;
         rf.setNumFeatures(k);
 
-        rf.setSeed(42);
+        rf.setSeed(36);
         rf.buildClassifier(train);
 
         System.out.println("Built RandomForest with " + rf.getNumIterations() + " trees and "
@@ -159,8 +158,8 @@ public class WorldHappinessModels {
     private static IBk buildKNN(Instances train) throws Exception {
         IBk knn = new IBk();
 
-        // k=5 neighbors
-        knn.setKNN(5);
+        // k=7 neighbors
+        knn.setKNN(7);
 
         knn.buildClassifier(train);
         System.out.println("Built KNN with k = " + knn.getKNN());
