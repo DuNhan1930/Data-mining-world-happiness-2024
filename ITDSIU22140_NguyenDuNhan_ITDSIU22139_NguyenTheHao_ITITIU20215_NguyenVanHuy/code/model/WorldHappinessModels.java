@@ -43,157 +43,157 @@ public class WorldHappinessModels {
         System.out.println("Number of classes: " + data.numClasses());
 
         // =====================
-        // 3. Stratified 80/20 train/test split with random seed 42
+        // 3. CV configuration
         // =====================
         int seed = 36;
-        double testRatio = 0.2;
-        Instances[] split = stratifiedTrainTestSplit(data, testRatio, seed);
-        Instances train = split[0];
-        Instances test  = split[1];
+        int numFolds = 10;  // 10-fold cross-validation
 
-        System.out.println("Train size: " + train.numInstances());
-        System.out.println("Test size : " + test.numInstances());
+        // =========================================================
+        // 4. Hyper parameter tuning using 10-fold cross-validation
+        // =========================================================
 
-        // =====================
-        // 4. Define models
-        // =====================
+        // --------- 4.1. Tune Random Forest: numIterations (n_estimators) ----------
+        int[] rfNumTreesList = {50, 100, 150, 200, 300, 400, 500};
 
-        // RandomForest
-        RandomForest rf = buildRandomForest(train);
+        double bestRfAcc = -1.0;
+        int bestRfTrees = rfNumTreesList[0];
 
-        // KNN (IBk)
-        IBk knn = buildKNN(train);
+        System.out.println("\n=== 10-fold CV: Random Forest hyper parameter search ===");
+        for (int numTrees : rfNumTreesList) {
+            RandomForest rf = createRandomForest(data, numTrees);
 
-        // =====================
-        // 5. Train & evaluate models
-        // =====================
-        evaluateModel("Random Forest", rf, train, test);
-        evaluateModel("KNN (k=7)",      knn, train, test);
-    }
+            double cvAcc = crossValidateAccuracy(rf, data, numFolds, seed);
+            System.out.printf("Random Forest with %d trees → CV Accuracy = %.4f%n", numTrees, cvAcc);
 
-    // -------------------------------------------------
-    // Stratified train/test split
-    // -------------------------------------------------
-    private static Instances[] stratifiedTrainTestSplit(Instances data,
-                                                        double testRatio,
-                                                        int seed) {
-        Instances rand = new Instances(data);
-        rand.randomize(new Random(seed));
-
-        if (!rand.classAttribute().isNominal()) {
-            // Fallback simple split if class is not nominal
-            int trainSize = (int) Math.round(rand.numInstances() * (1.0 - testRatio));
-            int testSize  = rand.numInstances() - trainSize;
-            Instances train = new Instances(rand, 0, trainSize);
-            Instances test  = new Instances(rand, trainSize, testSize);
-            train.setClassIndex(data.classIndex());
-            test.setClassIndex(data.classIndex());
-            return new Instances[]{ train, test };
+            if (cvAcc > bestRfAcc) {
+                bestRfAcc = cvAcc;
+                bestRfTrees = numTrees;
+            }
         }
+        System.out.printf("%n[Random Forest] Best numTrees = %d with CV Accuracy = %.4f%n",
+                bestRfTrees, bestRfAcc);
 
-        int numClasses = rand.numClasses();
-        java.util.List<java.util.List<Integer>> indicesPerClass = new java.util.ArrayList<>();
-        for (int c = 0; c < numClasses; c++) {
-            indicesPerClass.add(new java.util.ArrayList<>());
-        }
+        // --------- 4.2. Tune KNN: k neighbors ----------
+        int[] knnKList = {1, 3, 5, 7, 9, 11, 13};
 
-        for (int i = 0; i < rand.numInstances(); i++) {
-            int cls = (int) rand.instance(i).classValue();
-            indicesPerClass.get(cls).add(i);
-        }
+        double bestKnnAcc = -1.0;
+        int bestK = knnKList[0];
 
-        Random rnd = new Random(seed);
-        Instances train = new Instances(rand, 0);
-        Instances test  = new Instances(rand, 0);
+        System.out.println("\n=== 10-fold CV: KNN hyper parameter search ===");
+        for (int k : knnKList) {
+            IBk knn = createKNN(k);
 
-        for (int c = 0; c < numClasses; c++) {
-            java.util.List<Integer> idxList = indicesPerClass.get(c);
-            java.util.Collections.shuffle(idxList, rnd);
+            double cvAcc = crossValidateAccuracy(knn, data, numFolds, seed);
+            System.out.printf("KNN with k=%d → CV Accuracy = %.4f%n", k, cvAcc);
 
-            int n = idxList.size();
-            int nTrain = (int) Math.round(n * (1.0 - testRatio));
-            if (nTrain == n && n > 1) nTrain = n - 1; // ensure at least 1 test if possible
+            // If accuracy is higher, OR
+            // if accuracy is (almost) equal and k is larger → choose this k
+            if (cvAcc > bestKnnAcc + 1e-6 ||
+                    (Math.abs(cvAcc - bestKnnAcc) <= 1e-6 && k > bestK)) {
 
-            for (int i = 0; i < n; i++) {
-                int origIndex = idxList.get(i);
-                if (i < nTrain) {
-                    train.add(rand.instance(origIndex));
-                } else {
-                    test.add(rand.instance(origIndex));
-                }
+                bestKnnAcc = cvAcc;
+                bestK = k;
             }
         }
 
-        train.setClassIndex(data.classIndex());
-        test.setClassIndex(data.classIndex());
+        System.out.printf("%n[KNN] Best k = %d with CV Accuracy = %.4f%n", bestK, bestKnnAcc);
 
-        return new Instances[]{ train, test };
+        // =====================
+        // 5. Build final models with best params
+        // =====================
+        RandomForest bestRf = createRandomForest(data, bestRfTrees);
+        IBk bestKnn = createKNN(bestK);
+
+        // =====================
+        // 6. Final evaluation using 10-fold CV (detailed metrics)
+        // =====================
+        evaluateModelCV("Random Forest (best=" + bestRfTrees + " trees)", bestRf, data, numFolds, seed);
+        evaluateModelCV("KNN (best k=" + bestK + ")", bestKnn, data, numFolds, seed);
     }
 
     // -------------------------------------------------
-    // Build RandomForest
+    // Create RandomForest with chosen numTrees
+    // (for use with crossValidateModel; DO NOT call buildClassifier here)
     // -------------------------------------------------
-    private static RandomForest buildRandomForest(Instances train) throws Exception {
+    private static RandomForest createRandomForest(Instances data, int numTrees) {
         RandomForest rf = new RandomForest();
 
-        // Number of trees
-        rf.setNumIterations(300);
+        rf.setNumIterations(numTrees);
 
-        int numAttributes = train.numAttributes() - 1;
+        // Number of features per split = sqrt(#attributes - class)
+        int numAttributes = data.numAttributes() - 1; // exclude class attribute
         int k = (int) Math.round(Math.sqrt(numAttributes));
         if (k < 1) k = 1;
         rf.setNumFeatures(k);
 
         rf.setSeed(36);
-        rf.buildClassifier(train);
 
-        System.out.println("Built RandomForest with " + rf.getNumIterations() + " trees and "
-                + rf.getNumFeatures() + " features per split.");
+        System.out.println("Configured RandomForest: trees=" + rf.getNumIterations()
+                + ", features per split=" + rf.getNumFeatures());
         return rf;
     }
 
     // -------------------------------------------------
-    // Build KNN (IBk)
+    // Create KNN (IBk) with chosen k
     // -------------------------------------------------
-    private static IBk buildKNN(Instances train) throws Exception {
+    private static IBk createKNN(int k) {
         IBk knn = new IBk();
-
-        // k=7 neighbors
-        knn.setKNN(7);
-
-        knn.buildClassifier(train);
-        System.out.println("Built KNN with k = " + knn.getKNN());
+        knn.setKNN(k);
+        System.out.println("Configured KNN with k = " + knn.getKNN());
         return knn;
     }
 
     // -------------------------------------------------
-    // Evaluate model: accuracy, weighted F1, per-class metrics, confusion matrix
+    // Helper: run 10-fold CV and return accuracy only
     // -------------------------------------------------
-    private static void evaluateModel(String name,
-                                      Classifier model,
-                                      Instances train,
-                                      Instances test) throws Exception {
+    private static double crossValidateAccuracy(Classifier model,
+                                                Instances data,
+                                                int numFolds,
+                                                int seed) throws Exception {
+        Evaluation eval = new Evaluation(data);
+        eval.crossValidateModel(model, data, numFolds, new Random(seed));
+        return eval.pctCorrect() / 100.0;
+    }
 
-        Evaluation eval = new Evaluation(train);
-        eval.evaluateModel(model, test);
+    // -------------------------------------------------
+    // Evaluate model with k-fold cross-validation:
+    // - Accuracy
+    // - Weighted F1
+    // - Per-class metrics
+    // - Confusion matrix
+    // -------------------------------------------------
+    private static void evaluateModelCV(String name,
+                                        Classifier model,
+                                        Instances data,
+                                        int numFolds,
+                                        int seed) throws Exception {
 
-        double accuracy = eval.pctCorrect() / 100.0;
+        Evaluation eval = new Evaluation(data);
+        eval.crossValidateModel(model, data, numFolds, new Random(seed));
+
+        double accuracy   = eval.pctCorrect() / 100.0;
         double weightedF1 = eval.weightedFMeasure();
 
         System.out.println("\n========================================");
-        System.out.println("Model: " + name);
-        System.out.printf("Accuracy: %.4f%n", accuracy);
-        System.out.printf("Weighted F1-score: %.4f%n", weightedF1);
+        System.out.println("Model: " + name + " (" + numFolds + "-fold CV)");
+        System.out.printf("Accuracy (CV): %.4f%n", accuracy);
+        System.out.printf("Weighted F1-score (CV): %.4f%n", weightedF1);
 
         // ---------- Per-class metrics ----------
         System.out.println("\nPer-class metrics (precision, recall, F1, support):");
-        for (int i = 0; i < test.numClasses(); i++) {
-            String className = test.classAttribute().value(i);
+        double[][] cm = eval.confusionMatrix();
+
+        for (int i = 0; i < data.numClasses(); i++) {
+            String className = data.classAttribute().value(i);
             double precision = eval.precision(i);
             double recall    = eval.recall(i);
             double f1        = eval.fMeasure(i);
 
-            int support = (int) Math.round(eval.numTruePositives(i) + eval.numFalseNegatives(i));
+            // Support = tổng số instance thật của lớp i (tổng theo hàng i trong confusion matrix)
+            int support = 0;
+            for (int j = 0; j < data.numClasses(); j++) {
+                support += (int) Math.round(cm[i][j]);
+            }
 
             System.out.printf("Class %-10s | precision=%.4f | recall=%.4f | f1=%.4f | support=%d%n",
                     className, precision, recall, f1, support);
@@ -201,18 +201,17 @@ public class WorldHappinessModels {
 
         // ---------- Confusion matrix ----------
         System.out.println("\nConfusion matrix (rows=true, cols=pred):");
-        double[][] cm = eval.confusionMatrix();
 
         // Header row
         System.out.print("          ");
-        for (int j = 0; j < test.numClasses(); j++) {
-            System.out.printf("%-10s", test.classAttribute().value(j));
+        for (int j = 0; j < data.numClasses(); j++) {
+            System.out.printf("%-10s", data.classAttribute().value(j));
         }
         System.out.println();
 
         // Rows
         for (int i = 0; i < cm.length; i++) {
-            System.out.printf("%-10s", test.classAttribute().value(i));
+            System.out.printf("%-10s", data.classAttribute().value(i));
             for (int j = 0; j < cm[i].length; j++) {
                 System.out.printf("%-10d", (int) Math.round(cm[i][j]));
             }
