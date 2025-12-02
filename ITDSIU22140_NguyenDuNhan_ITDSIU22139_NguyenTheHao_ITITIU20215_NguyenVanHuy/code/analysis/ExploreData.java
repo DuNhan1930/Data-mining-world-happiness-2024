@@ -44,5 +44,6 @@ public class ExploreData {
         EDA.printNumericSummaries(data, numericCols); // mean, median, std, ...
         EDA.printOutlierStats(data, numericCols);     // outlier counts (justify robust scaler)
         EDA.printCorrelationMatrix(data, numericCols);// correlation matrix
+        EDA.printSkewness(data, numericCols);         // skewness (check asymmetry)
     }
 }

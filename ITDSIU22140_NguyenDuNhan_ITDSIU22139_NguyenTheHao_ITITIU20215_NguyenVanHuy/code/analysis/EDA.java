@@ -81,7 +81,6 @@ public class EDA {
 
     // ==========================================
     // 4. Correlation matrix (Pearson) for selected numeric columns
-    //    (computed directly from Instances to handle missing properly)
     // ==========================================
     public static void printCorrelationMatrix(Instances data, List<String> numericCols) {
         System.out.println("=== CORRELATION MATRIX (Pearson) ===");
@@ -132,7 +131,7 @@ public class EDA {
     }
 
     // ==========================================
-    // 5. Outlier statistics via Tukey's fences (support robust scaler decision)
+    // 5. Outlier statistics via Tukey's fences
     // ==========================================
     public static void printOutlierStats(Instances data, List<String> numericCols) {
         System.out.println("=== OUTLIER STATS (Tukey fences) ===");
@@ -170,6 +169,51 @@ public class EDA {
 
             System.out.printf("Attribute %-35s : Q1=%8.4f | Q3=%8.4f | IQR=%8.4f | lw=%8.4f | uw=%8.4f | lowOut=%4d | highOut=%4d%n",
                     col, q1, q3, iqr, lw, uw, lowCount, highCount);
+        }
+        System.out.println();
+    }
+
+    // ==========================================
+    // 6. Skewness per numeric attribute
+    // ==========================================
+    public static void printSkewness(Instances data, List<String> numericCols) {
+        System.out.println("=== SKEWNESS PER ATTRIBUTE ===");
+        System.out.println("Note: |skew| < 0.5 ≈ symmetric, 0.5–1 ≈ moderate, > 1 = highly skewed");
+        System.out.println("Ghi chú: |skew| < 0.5 ≈ gần đối xứng, 0.5–1 ≈ lệch vừa, > 1 = lệch mạnh");
+        System.out.println();
+
+        for (String col : numericCols) {
+            Attribute att = data.attribute(col);
+            if (att == null) {
+                System.out.println("Warning: numeric col not found: " + col);
+                continue;
+            }
+            if (!att.isNumeric()) {
+                System.out.println("Warning: col is not numeric: " + col);
+                continue;
+            }
+
+            List<Double> vals = collectNonMissingValues(data, att.index());
+            if (vals.isEmpty()) {
+                System.out.println("No data for: " + col);
+                continue;
+            }
+
+            double sk = skewness(vals);
+            double absSk = Math.abs(sk);
+            String level;
+            if (Double.isNaN(sk)) {
+                level = "NA (not enough data)";
+            } else if (absSk < 0.5) {
+                level = "≈ symmetric (gần đối xứng)";
+            } else if (absSk < 1.0) {
+                level = "moderately skewed (lệch vừa)";
+            } else {
+                level = "highly skewed (lệch mạnh)";
+            }
+
+            System.out.printf("Attribute %-35s : skewness=%8.4f → %s%n",
+                    col, sk, level);
         }
         System.out.println();
     }
@@ -262,5 +306,42 @@ public class EDA {
         int upper = (int) Math.ceil(pos);
         double weight = pos - lower;
         return sorted.get(lower) + weight * (sorted.get(upper) - sorted.get(lower));
+    }
+
+    /**
+     * Skewness of a list of numeric values.
+     * Measures asymmetry of the distribution.
+     * skewness ≈ 0      → symmetric
+     * skewness > 0      → tail on the right (right-skewed)
+     * skewness < 0      → tail on the left (left-skewed)
+     */
+    private static double skewness(List<Double> vals) {
+        int n = vals.size();
+        if (n < 2) {
+            return Double.NaN;
+        }
+
+        double mean = mean(vals);
+        double sum2 = 0.0; // Σ (x - mean)^2
+        double sum3 = 0.0; // Σ (x - mean)^3
+
+        for (double v : vals) {
+            double d = v - mean;
+            double d2 = d * d;
+            sum2 += d2;
+            sum3 += d2 * d; // (x - mean)^3
+        }
+
+        double m2 = sum2 / n;  // 2nd central moment
+        double m3 = sum3 / n;  // 3rd central moment
+
+        if (m2 == 0.0) {
+            // all values identical → no variance → skewness = 0
+            return 0.0;
+        }
+
+        // Fisher-Pearson coefficient of skewness:
+        // skew = m3 / (m2^(3/2))
+        return m3 / Math.pow(m2, 1.5);
     }
 }
