@@ -13,8 +13,7 @@ import java.util.Random;
 
 public class WorldHappinessModels {
 
-    // EN: Path to the preprocessed ARFF file.
-    // VI: Đường dẫn tới file ARFF đã tiền xử lý.
+    // Path to the preprocessed ARFF file.
     private static final String ARFF_PATH =
             "ITDSIU22140_NguyenDuNhan_ITDSIU22139_NguyenTheHao_ITITIU20215_NguyenVanHuy/code/data/World Happiness Report 2024 Preprocessed.arff";
 
@@ -46,7 +45,6 @@ public class WorldHappinessModels {
 
         // =====================
         // 3. Stratified 80/20 train/test split with random seed 42
-        //    EN: Similar idea to train_test_split(..., stratify=y, test_size=0.2, random_state=42)
         // =====================
         int seed = 42;
         double testRatio = 0.2;
@@ -61,25 +59,21 @@ public class WorldHappinessModels {
         // 4. Define models
         // =====================
 
-        // RandomForest ≈ sklearn RandomForestClassifier
+        // RandomForest
         RandomForest rf = buildRandomForest(train);
 
-        // MultilayerPerceptron ≈ sklearn MLPClassifier (but different backend)
-        MultilayerPerceptron mlp = buildMLP(train);
-
-        // KNN (IBk) ≈ KNeighborsClassifier(n_neighbors=5)
+        // KNN (IBk)
         IBk knn = buildKNN(train);
 
         // =====================
         // 5. Train & evaluate models
         // =====================
         evaluateModel("Random Forest", rf, train, test);
-        evaluateModel("MLP",            mlp, train, test);
         evaluateModel("KNN (k=5)",      knn, train, test);
     }
 
     // -------------------------------------------------
-    // Stratified train/test split (like train_test_split with stratify=y)
+    // Stratified train/test split
     // -------------------------------------------------
     private static Instances[] stratifiedTrainTestSplit(Instances data,
                                                         double testRatio,
@@ -98,7 +92,6 @@ public class WorldHappinessModels {
             return new Instances[]{ train, test };
         }
 
-        // Manual stratification per class (giống stratify=y trong Python)
         int numClasses = rand.numClasses();
         java.util.List<java.util.List<Integer>> indicesPerClass = new java.util.ArrayList<>();
         for (int c = 0; c < numClasses; c++) {
@@ -139,18 +132,15 @@ public class WorldHappinessModels {
     }
 
     // -------------------------------------------------
-    // Build RandomForest (like RandomForestClassifier)
+    // Build RandomForest
     // -------------------------------------------------
     private static RandomForest buildRandomForest(Instances train) throws Exception {
         RandomForest rf = new RandomForest();
 
-        // EN: Number of trees (similar to n_estimators in sklearn).
-        // VI: Số cây trong rừng (gần giống n_estimators).
-        rf.setNumIterations(300); // newer Weka uses setNumIterations instead of setNumTrees
+        // Number of trees
+        rf.setNumIterations(300);
 
-        // EN: max_features='sqrt' → use sqrt(numAttributes) features per split.
-        // VI: max_features='sqrt' → mỗi node chọn sqrt(M) thuộc tính ngẫu nhiên.
-        int numAttributes = train.numAttributes() - 1; // exclude class
+        int numAttributes = train.numAttributes() - 1;
         int k = (int) Math.round(Math.sqrt(numAttributes));
         if (k < 1) k = 1;
         rf.setNumFeatures(k);
@@ -164,40 +154,13 @@ public class WorldHappinessModels {
     }
 
     // -------------------------------------------------
-    // Build MLP (like MLPClassifier(hidden_layer_sizes=(64,32)))
-    // -------------------------------------------------
-    private static MultilayerPerceptron buildMLP(Instances train) throws Exception {
-        MultilayerPerceptron mlp = new MultilayerPerceptron();
-
-        // EN: Hidden layers "64,32" ≈ (64, 32) in sklearn.
-        // VI: 2 hidden layer, lần lượt 64 và 32 neurons.
-        mlp.setHiddenLayers("64,32");
-
-        // EN: TrainingTime ≈ max_iter.
-        // VI: Số epoch/bước huấn luyện, gần giống max_iter.
-        mlp.setTrainingTime(500);
-
-        // You can tune these if needed
-        mlp.setLearningRate(0.3);
-        mlp.setMomentum(0.2);
-        mlp.setSeed(42);
-
-        mlp.buildClassifier(train);
-        System.out.println("Built MLP with hidden layers: " + mlp.getHiddenLayers());
-        return mlp;
-    }
-
-    // -------------------------------------------------
-    // Build KNN (IBk) ≈ KNeighborsClassifier(n_neighbors=5)
+    // Build KNN (IBk)
     // -------------------------------------------------
     private static IBk buildKNN(Instances train) throws Exception {
         IBk knn = new IBk();
 
         // k=5 neighbors
         knn.setKNN(5);
-
-        // No weighting (classic KNN)
-        // Weka 3.x uses this automatically → equal weighting
 
         knn.buildClassifier(train);
         System.out.println("Built KNN with k = " + knn.getKNN());
@@ -231,8 +194,6 @@ public class WorldHappinessModels {
             double recall    = eval.recall(i);
             double f1        = eval.fMeasure(i);
 
-            // EN: support = TP + FN (true instances of that class in test set)
-            // VI: support = số mẫu thực sự thuộc lớp này trong tập test.
             int support = (int) Math.round(eval.numTruePositives(i) + eval.numFalseNegatives(i));
 
             System.out.printf("Class %-10s | precision=%.4f | recall=%.4f | f1=%.4f | support=%d%n",
