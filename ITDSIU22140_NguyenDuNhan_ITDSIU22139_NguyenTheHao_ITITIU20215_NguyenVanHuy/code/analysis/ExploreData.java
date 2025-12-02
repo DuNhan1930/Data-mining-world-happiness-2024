@@ -1,6 +1,5 @@
 package ITDSIU22140_NguyenDuNhan_ITDSIU22139_NguyenTheHao_ITITIU20215_NguyenVanHuy.code.analysis;
 
-import weka.core.Attribute;
 import weka.core.Instances;
 import weka.core.converters.CSVLoader;
 

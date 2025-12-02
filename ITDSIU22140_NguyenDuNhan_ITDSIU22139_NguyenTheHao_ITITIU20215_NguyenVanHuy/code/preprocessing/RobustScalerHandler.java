@@ -9,7 +9,6 @@ import java.util.Collections;
 import java.util.List;
 
 public class RobustScalerHandler {
-
     /**
      * Robust scale numeric columns using:
      *   x_scaled = (x - median) / IQR
@@ -26,9 +25,7 @@ public class RobustScalerHandler {
                 System.out.println("Warning: non-numeric robust scaling column: " + col);
                 continue;
             }
-
             int idx = att.index();
-
             // Collect non-missing values
             List<Double> vals = new ArrayList<>();
             for (int i = 0; i < data.numInstances(); i++) {
@@ -41,19 +38,16 @@ public class RobustScalerHandler {
                 System.out.println("Warning: no numeric data for " + col);
                 continue;
             }
-
             // Sort for median + percentiles
             Collections.sort(vals);
             double median = medianOfList(vals);
             double q1 = percentile(vals, 25.0);
             double q3 = percentile(vals, 75.0);
             double iqr = q3 - q1;
-
             if (Double.isNaN(median) || Double.isNaN(iqr) || iqr == 0.0) {
                 System.out.println("Warning: invalid IQR (" + iqr + ") for " + col + ", skip robust scaling.");
                 continue;
             }
-
             // Apply (x - median) / IQR to all non-missing values
             for (int i = 0; i < data.numInstances(); i++) {
                 Instance inst = data.instance(i);
@@ -62,7 +56,6 @@ public class RobustScalerHandler {
                 double scaled = (x - median) / iqr;
                 inst.setValue(idx, scaled);
             }
-
             System.out.println("Robust scaled " + col + " (median=" + median + ", IQR=" + iqr + ")");
         }
     }

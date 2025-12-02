@@ -84,7 +84,6 @@ public class EDA {
     // ==========================================
     public static void printCorrelationMatrix(Instances data, List<String> numericCols) {
         System.out.println("=== CORRELATION MATRIX (Pearson) ===");
-
         int m = numericCols.size();
         int[] attIdx = new int[m];
 
@@ -97,7 +96,6 @@ public class EDA {
             }
             attIdx[i] = att.index();
         }
-
         double[][] corr = new double[m][m];
 
         for (int i = 0; i < m; i++) {
@@ -111,19 +109,17 @@ public class EDA {
                 }
             }
         }
-
         // print header
-        System.out.print(String.format("%-28s", ""));
+        System.out.printf("%-28s", "");
         for (int j = 0; j < m; j++) {
-            System.out.print(String.format("%-12s", numericCols.get(j)));
+            System.out.printf("%-12s", numericCols.get(j));
         }
         System.out.println();
-
         // print rows
         for (int i = 0; i < m; i++) {
-            System.out.print(String.format("%-28s", numericCols.get(i)));
+            System.out.printf("%-28s", numericCols.get(i));
             for (int j = 0; j < m; j++) {
-                System.out.print(String.format("%-12.3f", corr[i][j]));
+                System.out.printf("%-12.3f", corr[i][j]);
             }
             System.out.println();
         }
@@ -179,7 +175,6 @@ public class EDA {
     public static void printSkewness(Instances data, List<String> numericCols) {
         System.out.println("=== SKEWNESS PER ATTRIBUTE ===");
         System.out.println("Note: |skew| < 0.5 ≈ symmetric, 0.5–1 ≈ moderate, > 1 = highly skewed");
-        System.out.println("Ghi chú: |skew| < 0.5 ≈ gần đối xứng, 0.5–1 ≈ lệch vừa, > 1 = lệch mạnh");
         System.out.println();
 
         for (String col : numericCols) {
@@ -205,11 +200,11 @@ public class EDA {
             if (Double.isNaN(sk)) {
                 level = "NA (not enough data)";
             } else if (absSk < 0.5) {
-                level = "≈ symmetric (gần đối xứng)";
+                level = "≈ symmetric";
             } else if (absSk < 1.0) {
-                level = "moderately skewed (lệch vừa)";
+                level = "moderately skewed";
             } else {
-                level = "highly skewed (lệch mạnh)";
+                level = "highly skewed";
             }
 
             System.out.printf("Attribute %-35s : skewness=%8.4f → %s%n",

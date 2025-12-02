@@ -11,8 +11,7 @@ import java.util.List;
 public class DropColumn {
 
     public static void dropColumns(Instances data, List<String> colNames) {
-        // EN: Delete from last to first to keep indexes valid
-        // VI: Xóa từ index lớn xuống nhỏ để không bị lệch index
+        // Delete from last to first to keep indexes valid
         for (String name : colNames) {
             Attribute att = data.attribute(name);
             if (att == null) {
