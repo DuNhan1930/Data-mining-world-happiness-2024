@@ -7,6 +7,7 @@ import weka.classifiers.Classifier;
 import weka.classifiers.Evaluation;
 import weka.classifiers.trees.RandomForest;
 import weka.classifiers.functions.MultilayerPerceptron;
+import weka.classifiers.lazy.IBk;   // KNN
 
 import java.util.Random;
 
@@ -44,24 +45,14 @@ public class WorldHappinessModels {
         System.out.println("Number of classes: " + data.numClasses());
 
         // =====================
-        // 3. Split 80/20 train/test with random seed 42
-        //    EN: Randomize, then take first 80% as train, remaining 20% as test.
-        //    VI: Trộn ngẫu nhiên (seed=42), lấy 80% đầu để train, 20% còn lại để test.
+        // 3. Stratified 80/20 train/test split with random seed 42
+        //    EN: Similar idea to train_test_split(..., stratify=y, test_size=0.2, random_state=42)
         // =====================
         int seed = 42;
-        Instances randData = new Instances(data);
-        randData.randomize(new Random(seed));
-        if (randData.classAttribute().isNominal()) {
-            // EN: This keeps class distribution more balanced across the split.
-            // VI: Stratify giúp giữ tỉ lệ class gần giống nhau giữa train và test.
-            randData.stratify(5); // optional: 5 folds for better class balance
-        }
-
-        int trainSize = (int) Math.round(randData.numInstances() * 0.8);
-        int testSize  = randData.numInstances() - trainSize;
-
-        Instances train = new Instances(randData, 0, trainSize);
-        Instances test  = new Instances(randData, trainSize, testSize);
+        double testRatio = 0.2;
+        Instances[] split = stratifiedTrainTestSplit(data, testRatio, seed);
+        Instances train = split[0];
+        Instances test  = split[1];
 
         System.out.println("Train size: " + train.numInstances());
         System.out.println("Test size : " + test.numInstances());
@@ -73,14 +64,78 @@ public class WorldHappinessModels {
         // RandomForest ≈ sklearn RandomForestClassifier
         RandomForest rf = buildRandomForest(train);
 
-        // MultilayerPerceptron ≈ sklearn MLPClassifier
+        // MultilayerPerceptron ≈ sklearn MLPClassifier (but different backend)
         MultilayerPerceptron mlp = buildMLP(train);
+
+        // KNN (IBk) ≈ KNeighborsClassifier(n_neighbors=5)
+        IBk knn = buildKNN(train);
 
         // =====================
         // 5. Train & evaluate models
         // =====================
         evaluateModel("Random Forest", rf, train, test);
         evaluateModel("MLP",            mlp, train, test);
+        evaluateModel("KNN (k=5)",      knn, train, test);
+    }
+
+    // -------------------------------------------------
+    // Stratified train/test split (like train_test_split with stratify=y)
+    // -------------------------------------------------
+    private static Instances[] stratifiedTrainTestSplit(Instances data,
+                                                        double testRatio,
+                                                        int seed) {
+        Instances rand = new Instances(data);
+        rand.randomize(new Random(seed));
+
+        if (!rand.classAttribute().isNominal()) {
+            // Fallback simple split if class is not nominal
+            int trainSize = (int) Math.round(rand.numInstances() * (1.0 - testRatio));
+            int testSize  = rand.numInstances() - trainSize;
+            Instances train = new Instances(rand, 0, trainSize);
+            Instances test  = new Instances(rand, trainSize, testSize);
+            train.setClassIndex(data.classIndex());
+            test.setClassIndex(data.classIndex());
+            return new Instances[]{ train, test };
+        }
+
+        // Manual stratification per class (giống stratify=y trong Python)
+        int numClasses = rand.numClasses();
+        java.util.List<java.util.List<Integer>> indicesPerClass = new java.util.ArrayList<>();
+        for (int c = 0; c < numClasses; c++) {
+            indicesPerClass.add(new java.util.ArrayList<>());
+        }
+
+        for (int i = 0; i < rand.numInstances(); i++) {
+            int cls = (int) rand.instance(i).classValue();
+            indicesPerClass.get(cls).add(i);
+        }
+
+        Random rnd = new Random(seed);
+        Instances train = new Instances(rand, 0);
+        Instances test  = new Instances(rand, 0);
+
+        for (int c = 0; c < numClasses; c++) {
+            java.util.List<Integer> idxList = indicesPerClass.get(c);
+            java.util.Collections.shuffle(idxList, rnd);
+
+            int n = idxList.size();
+            int nTrain = (int) Math.round(n * (1.0 - testRatio));
+            if (nTrain == n && n > 1) nTrain = n - 1; // ensure at least 1 test if possible
+
+            for (int i = 0; i < n; i++) {
+                int origIndex = idxList.get(i);
+                if (i < nTrain) {
+                    train.add(rand.instance(origIndex));
+                } else {
+                    test.add(rand.instance(origIndex));
+                }
+            }
+        }
+
+        train.setClassIndex(data.classIndex());
+        test.setClassIndex(data.classIndex());
+
+        return new Instances[]{ train, test };
     }
 
     // -------------------------------------------------
@@ -119,7 +174,7 @@ public class WorldHappinessModels {
         mlp.setHiddenLayers("64,32");
 
         // EN: TrainingTime ≈ max_iter.
-        // VI: Số epoch/bước huấn luyện, giống max_iter.
+        // VI: Số epoch/bước huấn luyện, gần giống max_iter.
         mlp.setTrainingTime(500);
 
         // You can tune these if needed
@@ -130,6 +185,23 @@ public class WorldHappinessModels {
         mlp.buildClassifier(train);
         System.out.println("Built MLP with hidden layers: " + mlp.getHiddenLayers());
         return mlp;
+    }
+
+    // -------------------------------------------------
+    // Build KNN (IBk) ≈ KNeighborsClassifier(n_neighbors=5)
+    // -------------------------------------------------
+    private static IBk buildKNN(Instances train) throws Exception {
+        IBk knn = new IBk();
+
+        // k=5 neighbors
+        knn.setKNN(5);
+
+        // No weighting (classic KNN)
+        // Weka 3.x uses this automatically → equal weighting
+
+        knn.buildClassifier(train);
+        System.out.println("Built KNN with k = " + knn.getKNN());
+        return knn;
     }
 
     // -------------------------------------------------
