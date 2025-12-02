@@ -12,15 +12,12 @@ import java.util.List;
 
 public class PreprocessWorldHappiness {
 
-    // EN: Paths (adjust if needed)
-    // VI: Đường dẫn file (chỉnh lại nếu cấu trúc project khác)
     private static final String INPUT_CSV  =
             "ITDSIU22140_NguyenDuNhan_ITDSIU22139_NguyenTheHao_ITITIU20215_NguyenVanHuy/code/data/World Happiness Report 2024.csv";
 
     private static final String OUTPUT_ARFF =
             "ITDSIU22140_NguyenDuNhan_ITDSIU22139_NguyenTheHao_ITITIU20215_NguyenVanHuy/code/data/World Happiness Report 2024 Preprocessed.arff";
 
-    // Numeric columns used for model (same as Python num_cols in classification)
     private static final List<String> NUM_COLS = Arrays.asList(
             "year",
             "Log GDP per capita",
@@ -49,44 +46,36 @@ public class PreprocessWorldHappiness {
 
         // =====================
         // 2. Create Life Ladder Category (bins [0,3,5,7,10])
-        //    Giống với pandas.cut trong preprocess.py
         // =====================
         ensureLifeLadderCategory(data);
 
         // =====================
         // 3. Impute missing values by median for numeric cols
-        //    Đi giống: for col in num_cols: fillna(median)
         // =====================
         MissingValueHandler.imputeMedian(data, NUM_COLS);
 
         // =====================
-        // 4. (Optional) Winsorize numeric cols by whiskers
-        //    Cắt outlier theo Q1−1.5*IQR và Q3+1.5*IQR
+        // 4. Robust scaler numeric columns
         // =====================
         RobustScalerHandler.robustScale(data, NUM_COLS);      // RobustScaler
 
         // =====================
         // 5. Drop unwanted columns
-        //    - Drop "Healthy life expectancy at birth" để giống chosed_cols_cate
-        //    - Drop numeric Life Ladder để tránh leakage khi dự đoán Life Ladder Category
         // =====================
         DropColumn.dropColumns(data, Arrays.asList(
                 "Healthy life expectancy at birth",
-                LIFE_LADDER_NUM_COL   // tránh leak vào target
+                LIFE_LADDER_NUM_COL
         ));
 
         System.out.println("After drop: " + data.numAttributes() + " attributes.");
 
         // =====================
         // 6. One-hot encode Country name (NominalToBinary)
-        //    X_cat_dummies = pd.get_dummies(df[['Country name']], drop_first=True)
-        //    Ở đây mình one-hot full, không drop_first; khác biệt nhỏ.
         // =====================
         data = EncodingHandler.oneHotEncodeNominal(data, COUNTRY_COL);
 
         // =====================
         // 7. Set class attribute = Life Ladder Category
-        //    Tương đương LabelEncoder.fit_transform(y) bên Python, nhưng Weka làm ngầm
         // =====================
         Attribute classAttr = data.attribute(LIFE_LADDER_CAT_COL);
         if (classAttr == null) {
@@ -109,8 +98,6 @@ public class PreprocessWorldHappiness {
 
     /**
      * Ensure Life Ladder Category exists, constructed from Life Ladder using bins [0,3,5,7,10].
-     * Giống với:
-     * pd.cut(df['Life Ladder'], bins=[0,3,5,7,10], labels=['Low','Medium','High','Very High'])
      */
     private static void ensureLifeLadderCategory(Instances data) {
         Attribute catAttr = data.attribute(LIFE_LADDER_CAT_COL);

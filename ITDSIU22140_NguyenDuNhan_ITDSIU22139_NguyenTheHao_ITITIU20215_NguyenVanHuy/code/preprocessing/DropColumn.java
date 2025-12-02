@@ -6,8 +6,7 @@ import weka.core.Attribute;
 import java.util.List;
 
 /**
- * EN: Utility to drop columns (attributes) by name.
- * VI: Tiện ích để xóa cột theo tên thuộc tính.
+ * Utility to drop columns (attributes) by name.
  */
 public class DropColumn {
 

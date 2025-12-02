@@ -12,8 +12,6 @@ public class MissingValueHandler {
 
     /**
      * Impute missing numeric values in the given columns using median.
-     * EN: Like df[col] = df[col].fillna(df[col].median())
-     * VI: Giống fillna(median) cho từng cột số.
      */
     public static void imputeMedian(Instances data, List<String> columns) {
         for (String col : columns) {

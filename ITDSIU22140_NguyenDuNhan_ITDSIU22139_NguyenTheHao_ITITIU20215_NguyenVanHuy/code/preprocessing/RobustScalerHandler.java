@@ -14,9 +14,6 @@ public class RobustScalerHandler {
      * Robust scale numeric columns using:
      *   x_scaled = (x - median) / IQR
      * where IQR = Q3 - Q1.
-     *
-     * EN: Similar to sklearn's RobustScaler for each column.
-     * VI: Giống RobustScaler của sklearn cho từng cột số.
      */
     public static void robustScale(Instances data, List<String> numericCols) {
         for (String col : numericCols) {
