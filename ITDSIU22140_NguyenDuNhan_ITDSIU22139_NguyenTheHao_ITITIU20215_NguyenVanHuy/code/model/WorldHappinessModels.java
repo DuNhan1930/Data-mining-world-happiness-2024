@@ -63,7 +63,7 @@ public class WorldHappinessModels {
             RandomForest rf = createRandomForest(data, numTrees);
 
             double cvAcc = crossValidateAccuracy(rf, data, numFolds, seed);
-            System.out.printf("Random Forest with %d trees → CV Accuracy = %.4f%n", numTrees, cvAcc);
+            System.out.printf("Random Forest with %d trees -> CV Accuracy = %.4f%n", numTrees, cvAcc);
 
             if (cvAcc > bestRfAcc) {
                 bestRfAcc = cvAcc;
@@ -84,10 +84,10 @@ public class WorldHappinessModels {
             IBk knn = createKNN(k);
 
             double cvAcc = crossValidateAccuracy(knn, data, numFolds, seed);
-            System.out.printf("KNN with k=%d → CV Accuracy = %.4f%n", k, cvAcc);
+            System.out.printf("KNN with k=%d -> CV Accuracy = %.4f%n", k, cvAcc);
 
             // If accuracy is higher, OR
-            // if accuracy is (almost) equal and k is larger → choose this k
+            // if accuracy is (almost) equal and k is larger -> choose this k
             if (cvAcc > bestKnnAcc + 1e-6 ||
                     (Math.abs(cvAcc - bestKnnAcc) <= 1e-6 && k > bestK)) {
 
@@ -105,7 +105,7 @@ public class WorldHappinessModels {
         IBk bestKnn = createKNN(bestK);
 
         // =====================
-        // 6. Final evaluation using 10-fold CV (detailed metrics)
+        // 6. Final evaluation using 10-fold CV (detailed metrics + per fold)
         // =====================
         evaluateModelCV("Random Forest (best=" + bestRfTrees + " trees)", bestRf, data, numFolds, seed);
         evaluateModelCV("KNN (best k=" + bestK + ")", bestKnn, data, numFolds, seed);
@@ -127,8 +127,8 @@ public class WorldHappinessModels {
 
         rf.setSeed(36);
 
-        System.out.println("Configured RandomForest: trees=" + rf.getNumIterations()
-                + ", features per split=" + rf.getNumFeatures());
+        // Commented out to reduce noise during loops, uncomment if needed
+        // System.out.println("Configured RandomForest: trees=" + rf.getNumIterations() + ", features per split=" + rf.getNumFeatures());
         return rf;
     }
 
@@ -138,12 +138,14 @@ public class WorldHappinessModels {
     private static IBk createKNN(int k) {
         IBk knn = new IBk();
         knn.setKNN(k);
-        System.out.println("Configured KNN with k = " + knn.getKNN());
+        // Commented out to reduce noise during loops, uncomment if needed
+        // System.out.println("Configured KNN with k = " + knn.getKNN());
         return knn;
     }
 
     // -------------------------------------------------
     // Helper: run 10-fold CV and return accuracy only
+    // (Used for tuning loop)
     // -------------------------------------------------
     private static double crossValidateAccuracy(Classifier model,
                                                 Instances data,
@@ -156,6 +158,7 @@ public class WorldHappinessModels {
 
     // -------------------------------------------------
     // Evaluate model with k-fold cross-validation:
+    // - PRINTS ACCURACY PER FOLD
     // - Accuracy
     // - Weighted F1
     // - Per-class metrics
@@ -167,26 +170,60 @@ public class WorldHappinessModels {
                                         int numFolds,
                                         int seed) throws Exception {
 
-        Evaluation eval = new Evaluation(data);
-        eval.crossValidateModel(model, data, numFolds, new Random(seed));
-
-        double accuracy   = eval.pctCorrect() / 100.0;
-        double weightedF1 = eval.weightedFMeasure();
-
         System.out.println("\n========================================");
         System.out.println("Model: " + name + " (" + numFolds + "-fold CV)");
-        System.out.printf("Accuracy (CV): %.4f%n", accuracy);
+        System.out.println("----------------------------------------");
+        System.out.println("Per-fold Accuracy Details:");
+
+        // Make a copy of data to randomize
+        Instances randData = new Instances(data);
+        randData.randomize(new Random(seed));
+        if (randData.classAttribute().isNominal()) {
+            randData.stratify(numFolds);
+        }
+
+        // We need one main evaluation object to aggregate all folds for the final report
+        Evaluation totalEval = new Evaluation(randData);
+
+        // Manual CV Loop
+        for (int n = 0; n < numFolds; n++) {
+            Instances train = randData.trainCV(numFolds, n);
+            Instances test = randData.testCV(numFolds, n);
+
+            // We must rebuild the classifier on the training fold
+            // (Note: This is what crossValidateModel does internally)
+            Classifier foldModel = weka.classifiers.AbstractClassifier.makeCopy(model);
+            foldModel.buildClassifier(train);
+
+            // Evaluate on this specific fold
+            Evaluation foldEval = new Evaluation(train);
+            foldEval.evaluateModel(foldModel, test);
+
+            // Print accuracy for this fold
+            double foldAcc = foldEval.pctCorrect();
+            System.out.printf("Fold %2d: %.4f%% (%d instances)%n", (n + 1), foldAcc, test.numInstances());
+
+            // Accumulate statistics into the total evaluation object
+            totalEval.evaluateModel(foldModel, test);
+        }
+
+        // --- Calculate Final Aggregate Metrics ---
+        double accuracy   = totalEval.pctCorrect() / 100.0;
+        double weightedF1 = totalEval.weightedFMeasure();
+
+        System.out.println("----------------------------------------");
+        System.out.printf("Average Accuracy (CV): %.4f%n", accuracy);
         System.out.printf("Weighted F1-score (CV): %.4f%n", weightedF1);
 
         // ---------- Per-class metrics ----------
         System.out.println("\nPer-class metrics (precision, recall, F1, support):");
-        double[][] cm = eval.confusionMatrix();
+        double[][] cm = totalEval.confusionMatrix();
 
         for (int i = 0; i < data.numClasses(); i++) {
             String className = data.classAttribute().value(i);
-            double precision = eval.precision(i);
-            double recall    = eval.recall(i);
-            double f1        = eval.fMeasure(i);
+            double precision = totalEval.precision(i);
+            double recall    = totalEval.recall(i);
+            double f1        = totalEval.fMeasure(i);
 
             int support = 0;
             for (int j = 0; j < data.numClasses(); j++) {

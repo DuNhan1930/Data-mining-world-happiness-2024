@@ -35,4 +35,9 @@ public class Neuron {
         }
         return sum;
     }
+
+    public void copyWeightsFrom(Neuron source) {
+        this.bias = source.bias;
+        System.arraycopy(source.weights, 0, this.weights, 0, source.weights.length);
+    }
 }

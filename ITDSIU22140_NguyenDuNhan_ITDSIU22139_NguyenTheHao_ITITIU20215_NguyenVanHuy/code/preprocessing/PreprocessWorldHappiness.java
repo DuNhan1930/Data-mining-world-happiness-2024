@@ -70,7 +70,7 @@ public class PreprocessWorldHappiness {
         System.out.println("After drop: " + data.numAttributes() + " attributes.");
 
         // =====================
-        // 6. One-hot encode Country name (NominalToBinary)
+        // 6. One-hot encode Country name
         // =====================
         data = EncodingHandler.oneHotEncodeNominal(data, COUNTRY_COL);
 

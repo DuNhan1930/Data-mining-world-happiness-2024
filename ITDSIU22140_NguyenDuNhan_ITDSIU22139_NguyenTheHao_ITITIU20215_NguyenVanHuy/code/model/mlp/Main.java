@@ -3,124 +3,163 @@ package ITDSIU22140_NguyenDuNhan_ITDSIU22139_NguyenTheHao_ITITIU20215_NguyenVanH
 import weka.core.Instance;
 import weka.core.Instances;
 import java.util.Random;
-import java.util.Arrays;
 
 public class Main {
     private static final String ARFF_PATH =
             "ITDSIU22140_NguyenDuNhan_ITDSIU22139_NguyenTheHao_ITITIU20215_NguyenVanHuy/code/data/World Happiness Report 2024 Preprocessed.arff";
 
-    private static final int EPOCHS = 50;
-    private static final double LEARNING_RATE = 0.001;
+    // --- Hyperparameters ---
+    private static final int MAX_EPOCHS = 200;
+    private static final double LEARNING_RATE = 0.0001;
     private static final int FOLDS = 10;
-    private static final int NUM_CLASSES = 3; // Low, Medium, High
+
+    // --- Early Stopping Parameters ---
+    private static final int PATIENCE = 20;
+    private static final int MIN_EPOCHS_BEFORE_STOP = 40;
+    private static final double MIN_DELTA = 1e-4;
 
     public static void main(String[] args) throws Exception {
         // 1. Load Data
         Instances data = WekaUtils.loadData(ARFF_PATH);
+
+        // 2. Balance Data
+        // System.out.println("Applying Class Balancing...");
+        // data = WekaUtils.balanceData(data);
+
+        // 3. Normalization
+        System.out.println("Applying Normalization...");
+        data = WekaUtils.normalizeData(data);
+        // --------------------------------------
+
         data.randomize(new Random(42));
 
-        // Auto-detect input size (columns - class column)
         int inputSize = data.numAttributes() - 1;
         System.out.println("Detected Input Size: " + inputSize);
 
-        // Matrix to store results across all 10 folds
-        int[][] confusionMatrix = new int[NUM_CLASSES][NUM_CLASSES];
         double totalAccuracy = 0;
+        int[][] globalConfusionMatrix = new int[3][3];
 
-        System.out.println("Starting MLP Training (10-Fold CV)...");
-        System.out.println("-------------------------------------");
+        System.out.println("Starting MLP with Early Stopping & Weight Restoration...");
 
         for (int n = 0; n < FOLDS; n++) {
-            Instances train = data.trainCV(FOLDS, n);
-            Instances test = data.testCV(FOLDS, n);
+            System.out.println("\n=== Fold " + (n + 1) + " ===");
 
-            Network net = new Network(inputSize);
-            Optimizer optimizer = new Optimizer(LEARNING_RATE);
+            Instances trainOriginal = data.trainCV(FOLDS, n);
+            Instances testSet = data.testCV(FOLDS, n);
 
-            // --- Training Loop ---
-            for (int epoch = 0; epoch < EPOCHS; epoch++) {
-                train.randomize(new Random(epoch)); // Shuffle for better stability
+            trainOriginal.randomize(new Random(n));
+            int valSize = (int) (trainOriginal.numInstances() * 0.10);
+            int trainRealSize = trainOriginal.numInstances() - valSize;
 
-                for (int i = 0; i < train.numInstances(); i++) {
-                    Instance inst = train.instance(i);
-                    double[] input = WekaUtils.instanceToInput(inst);
-                    double[] target = WekaUtils.targetToOneHot(inst);
+            Instances trainActual = new Instances(trainOriginal, 0, trainRealSize);
+            Instances valSet = new Instances(trainOriginal, trainRealSize, valSize);
 
-                    net.forward(input);
-                    net.backward(target);
-                    optimizer.update(net);
+            Network model = new Network(inputSize);
+            Network bestModel = new Network(inputSize);
+            Optimizer optimizer = new Optimizer(LEARNING_RATE, 0.001);
+
+            double best_val_loss = Double.MAX_VALUE;
+            int best_epoch = 0;
+            int wait = 0;
+
+            for (int epoch = 1; epoch <= MAX_EPOCHS; epoch++) {
+                // Training
+                trainActual.randomize(new Random(epoch));
+                for (int i = 0; i < trainActual.numInstances(); i++) {
+                    Instance inst = trainActual.instance(i);
+                    model.forward(WekaUtils.instanceToInput(inst), true);
+                    model.backward(WekaUtils.targetToOneHot(inst));
+                    optimizer.update(model);
+                }
+
+                // Validation
+                double val_loss = calculateLoss(model, valSet);
+
+                // Check improvement
+                if (best_val_loss - val_loss > MIN_DELTA) {
+                    best_val_loss = val_loss;
+                    best_epoch = epoch;
+                    bestModel.copyWeightsFrom(model);
+                    wait = 0;
+
+                    // Just print log when have new record
+                    if (epoch % 5 == 0) {
+                        System.out.printf("   [+] Epoch %d: New Best Loss %.5f\n", epoch, val_loss);
+                    }
+                } else {
+                    wait++;
+                }
+
+                // Early Stopping Condition
+                if (epoch > MIN_EPOCHS_BEFORE_STOP && wait >= PATIENCE) {
+                    System.out.println("   [STOP] Early Stopping triggered at Epoch " + epoch);
+                    break;
                 }
             }
 
-            // --- Evaluation Loop ---
-            int correct = 0;
-            for (int i = 0; i < test.numInstances(); i++) {
-                Instance inst = test.instance(i);
-                double[] input = WekaUtils.instanceToInput(inst);
-                double[] output = net.forward(input);
-
-                int actual = (int) inst.classValue();
-                int predicted = getArgMax(output);
-
-                // Update Matrix: Row = Actual, Col = Predicted
-                confusionMatrix[actual][predicted]++;
-
-                if (predicted == actual) {
-                    correct++;
-                }
+            System.out.println("   [RESTORE] Loading weights from Best Epoch: " + best_epoch);
+            if (best_epoch > 0) {
+                model.copyWeightsFrom(bestModel);
             }
 
-            double foldAccuracy = (double) correct / test.numInstances();
+            updateConfusionMatrix(model, testSet, globalConfusionMatrix);
+            double foldAccuracy = evaluate(model, testSet);
             totalAccuracy += foldAccuracy;
-            System.out.printf("Fold %d: Accuracy = %.2f%%\n", (n + 1), foldAccuracy * 100);
+            System.out.printf("-> Fold %d Test Accuracy: %.2f%%\n", (n + 1), foldAccuracy * 100);
         }
 
-        System.out.println("-------------------------------------");
-        System.out.printf("Final Average Accuracy: %.2f%%\n", (totalAccuracy / FOLDS) * 100);
-        System.out.println("-------------------------------------");
+        System.out.println("\n-------------------------------------");
+        System.out.printf("Final Average Test Accuracy: %.2f%%\n", (totalAccuracy / FOLDS) * 100);
+        printConfusionMatrix(globalConfusionMatrix, data);
+    }
 
-        // Print Confusion Matrix
-        printConfusionMatrix(confusionMatrix, data);
+    private static double calculateLoss(Network net, Instances data) {
+        double totalLoss = 0;
+        for (int i = 0; i < data.numInstances(); i++) {
+            Instance inst = data.instance(i);
+            double[] output = net.forward(WekaUtils.instanceToInput(inst), false);
+            totalLoss += LossFunction.compute(output, WekaUtils.targetToOneHot(inst));
+        }
+        return totalLoss / data.numInstances();
+    }
+
+    private static double evaluate(Network net, Instances data) {
+        int correct = 0;
+        for (int i = 0; i < data.numInstances(); i++) {
+            Instance inst = data.instance(i);
+            double[] output = net.forward(WekaUtils.instanceToInput(inst), false);
+            if (getArgMax(output) == (int) inst.classValue()) correct++;
+        }
+        return (double) correct / data.numInstances();
+    }
+
+    private static void updateConfusionMatrix(Network net, Instances data, int[][] matrix) {
+        for (int i = 0; i < data.numInstances(); i++) {
+            Instance inst = data.instance(i);
+            double[] output = net.forward(WekaUtils.instanceToInput(inst), false);
+            matrix[(int) inst.classValue()][getArgMax(output)]++;
+        }
     }
 
     private static int getArgMax(double[] arr) {
         int maxIdx = 0;
         double maxVal = arr[0];
-        for (int i = 1; i < arr.length; i++) {
-            if (arr[i] > maxVal) {
-                maxVal = arr[i];
-                maxIdx = i;
-            }
-        }
+        for (int i = 1; i < arr.length; i++) if (arr[i] > maxVal) { maxVal = arr[i]; maxIdx = i; }
         return maxIdx;
     }
 
     private static void printConfusionMatrix(int[][] matrix, Instances data) {
-        System.out.println("=== Overall Confusion Matrix ===");
-
-        // Get class names from Weka metadata
+        System.out.println("\n=== Overall Confusion Matrix ===");
         int numClasses = data.numClasses();
         String[] classNames = new String[numClasses];
-        for(int i=0; i<numClasses; i++) {
-            classNames[i] = data.classAttribute().value(i);
-        }
-
-        // Print Header
+        for(int i=0; i<numClasses; i++) classNames[i] = data.classAttribute().value(i);
         System.out.print("\t");
-        for (String name : classNames) {
-            System.out.printf("%-10s ", name + "(P)");
-        }
+        for (String name : classNames) System.out.printf("%-10s ", name + "(P)");
         System.out.println();
-
-        // Print Rows
         for (int i = 0; i < numClasses; i++) {
-            System.out.printf("%-10s ", classNames[i] + "(A)"); // A for Actual
-            for (int j = 0; j < numClasses; j++) {
-                System.out.printf("%-10d ", matrix[i][j]);
-            }
+            System.out.printf("%-10s ", classNames[i] + "(A)");
+            for (int j = 0; j < numClasses; j++) System.out.printf("%-10d ", matrix[i][j]);
             System.out.println();
         }
-
-        System.out.println("\n(A) = Actual, (P) = Predicted");
     }
 }
