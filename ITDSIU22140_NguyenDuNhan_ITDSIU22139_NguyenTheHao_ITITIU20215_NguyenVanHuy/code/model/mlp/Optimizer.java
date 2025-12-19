@@ -32,7 +32,7 @@ public class Optimizer {
 
                 // 1. Update Weights
                 for (int j = 0; j < n.weights.length; j++) {
-                    // Tính Gradient gốc: Error * Input
+                    // Cal Gradient ori: Error * Input
                     double grad = n.gradient * layer.inputs[j];
 
                     // --- APPLY L2 REGULARIZATION ---
@@ -40,7 +40,7 @@ public class Optimizer {
                     grad = grad + (lambda * n.weights[j]);
                     // ---------------------------------
 
-                    // Tính Adam Moments
+                    // Cal Adam Moments
                     n.mWeights[j] = beta1 * n.mWeights[j] + (1 - beta1) * grad;
                     n.vWeights[j] = beta2 * n.vWeights[j] + (1 - beta2) * (grad * grad);
 
